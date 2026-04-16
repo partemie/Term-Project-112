@@ -89,6 +89,7 @@ class PortfolioAppModel:
         self.variance = 0
         self.start_date = '2020-01-01'
         self.end_date = None
+        self.all_portfolios = [] # stores (vol, ret) for every generated portfolio
 
     def calculate_portfolio(self):
         if len(self.tickers) == 0:
@@ -150,64 +151,75 @@ class PortfolioAppModel:
         self.efficient_frontier = efficient
         best = max(results, key=lambda x: x[1] / x[0])
         self.optimal_weights = best[2]
+        # Store all (vol, ret) pairs, subsampled to 400
+        step = max(1, len(results) // 400)
+        self.all_portfolios = [(v, r) for v, r, _ in results[::step]]
+        # Store user portfolio as a point
+        w_user = np.array(self.weights)
+        user_ret = float(np.dot(mu, w_user))
+        user_vol = float(np.sqrt(np.dot(w_user.T, np.dot(sigma, w_user))))
+        self.user_frontier_point = (user_vol, user_ret)
+        opt_ret = float(best[1])
+        opt_vol = float(best[0])
+        self.optimal_frontier_point = (opt_vol, opt_ret)
 
-def run_backtest(self):
-    # Make sure that we have returns data before running backtest
-    if self.returns_df is None:
-        return
-    
-    # Convert user's weights into NumPy array
-    w1 = np.array(self.weights)
+    def run_backtest(self):
+        # Make sure that we have returns data before running backtest
+        if self.returns_df is None:
+            return
+        
+        # Convert user's weights into NumPy array
+        w1 = np.array(self.weights)
 
-    # Check if number of weights matches the number of assets
-    if len(w1) != self.returns_df.shape[1]:
-        return
-    
-    # Download benchmark data (S&P 500: SPY)
-    try:
-        benchmark = yf.download("SPY", start=self.start_date, end=self.end_date)['Close']
-        # Compute daily returns
-        benchmark_returns = benchmark.pct_change().dropna()
-    except:
-        self.benchmark_cumulative = None
-        return
-    
-    # Align dates between portfolio returns and benchmark returns
-    common_idx = self.returns_df.index.intersection(benchmark_returns.index)
-    aligned_df = self.returns_df.loc[common_idx]
+        # Check if number of weights matches the number of assets
+        if len(w1) != self.returns_df.shape[1]:
+            return
+        
+        # Download benchmark data (S&P 500: SPY)
+        try:
+            benchmark = yf.download("SPY", start=self.start_date, end=self.end_date)['Close']
+            # Compute daily returns
+            benchmark_returns = benchmark.pct_change().dropna()
+        except:
+            self.benchmark_cumulative = None
+            return
+        
+        # Align dates between portfolio returns and benchmark returns
+        common_idx = self.returns_df.index.intersection(benchmark_returns.index)
+        aligned_df = self.returns_df.loc[common_idx]
 
-    # Convert aligned returns to NumPy arrays
-    aligned_returns = aligned_df.values
-    benchmark_returns = benchmark_returns.loc[common_idx].values
+        # Convert aligned returns to NumPy arrays
+        aligned_returns = aligned_df.values
+        benchmark_returns = benchmark_returns.loc[common_idx].values
 
-    # Compute user's portfolio returns
-    user_returns = aligned_returns @ w1
+        # Compute user's portfolio returns
+        user_returns = aligned_returns @ w1
 
-    # Store portfolio returns and compute cumulative performance
-    self.portfolio_returns = user_returns
-    self.user_cumulative = np.cumprod(1 + user_returns)
+        # Store portfolio returns and compute cumulative performance
+        self.portfolio_returns = user_returns
+        self.user_cumulative = np.cumprod(1 + user_returns)
 
-    # Equal-weight portfolio for comparison
-    n = len(self.tickers)
-    equal_weights = np.ones(n) / n
-    equal_returns = aligned_returns @ equal_weights
+        # Equal-weight portfolio for comparison
+        n = len(self.tickers)
+        equal_weights = np.ones(n) / n
+        equal_returns = aligned_returns @ equal_weights
 
-    # Compute cumulative returns for equal-weight portfolio and benchmark
-    self.equal_cumulative = np.cumprod(1 + equal_returns)
-    self.benchmark_cumulative = np.cumprod(1 + benchmark_returns)
+        # Compute cumulative returns for equal-weight portfolio and benchmark
+        self.equal_cumulative = np.cumprod(1 + equal_returns)
+        self.benchmark_cumulative = np.cumprod(1 + benchmark_returns)
 
-    # Compute performance of the portfolio with optimized weights if not None
-    if self.optimal_weights is not None:
-        w2 = np.array(self.optimal_weights)
-        optimal_returns = aligned_returns @ w2
+        # Compute performance of the portfolio with optimized weights if not None
+        if self.optimal_weights is not None:
+            w2 = np.array(self.optimal_weights)
+            optimal_returns = aligned_returns @ w2
 
-        # Store optimized portfolio returns and cumulative performance
-        self.optimal_returns = optimal_returns
-        self.optimal_cumulative = np.cumprod(1 + optimal_returns)
-    else:
-        # If there is no optimized portfolio
-        self.optimal_returns = None
-        self.optimal_cumulative = None
+            # Store optimized portfolio returns and cumulative performance
+            self.optimal_returns = optimal_returns
+            self.optimal_cumulative = np.cumprod(1 + optimal_returns)
+        else:
+            # If there is no optimized portfolio
+            self.optimal_returns = None
+            self.optimal_cumulative = None
 
 def createRow(y):
     return {
@@ -566,7 +578,7 @@ def drawWeightsScreen(app):
     panel1Y = 50
     panel1H = 220
 
-    # ── Panel 1 : user's portfolio ──
+    # Panel 1 : user's portfolio
     drawPortfolioPanel(
         title="Provided Portfolio",
         subtitle="Your allocation",
@@ -577,7 +589,7 @@ def drawWeightsScreen(app):
         panelH=panel1H
     )
 
-    # ── Panel 2 : optimal portfolio ──
+    # Panel 2 : optimal portfolio 
     panel2Y = panel1Y + panel1H + panelGap
 
     if m.optimal_weights is not None:
@@ -899,31 +911,103 @@ def drawGrowthScreen(app):
             drawLabel("N/A", cx, boxY + 40, size=9, fill='gray')
 
 def drawAnnualScreen(app):
-    df = app.model.returns_df
-    drawLabel("Annual Returns", 300, 30, bold=True, size=16)
-    if df is None:
+    m = app.model
+    drawLabel("Annual Returns (%)", 300, 30, bold=True, size=16)
+    if m.returns_df is None or m.portfolio_returns is None:
         drawLabel("Run Optimize first", 300, 200, fill='gray')
         return
-    df = df.copy()
-    df['year'] = df.index.year
-    annual = df.groupby('year').sum()
-    values = annual.mean(axis=1).values
-    years = list(annual.index)
-    if len(values) == 0:
+ 
+    # Build a weighted portfolio return series aligned to the backtest index
+    user_cum = getattr(m, 'user_cumulative', None)
+    if user_cum is None or len(user_cum) < 2:
+        drawLabel("Not enough data", 300, 200, fill='gray')
         return
-    max_v = max(abs(v) for v in values) or 1
-    barW = min(40, 400 // len(values))
-    for i, v in enumerate(values):
-        h = (v / max_v) * 150
-        x = 80 + i * (barW + 10)
-        color = 'green' if v >= 0 else 'red'
-        if h >= 0:
-            drawRect(x, 350 - h, barW, h, fill=color)
+ 
+    # Use the aligned returns_df index (same as backtest) to get yearly boundaries
+    idx = m.returns_df.index
+    # Filter to user-selected date range
+    start = pd.Timestamp(m.start_date)
+    end   = pd.Timestamp(m.end_date) if m.end_date else idx[-1]
+    mask  = (idx >= start) & (idx <= end)
+    idx   = idx[mask]
+    port_ret = m.portfolio_returns[:len(idx)]
+ 
+    if len(port_ret) < 2:
+        drawLabel("Not enough data in selected period", 300, 200, fill='gray')
+        return
+ 
+    # Compute annual % change in cumulative returns
+    # Group daily returns by year, compound them: (prod(1+r) - 1) * 100
+    years_in_range = sorted(set(idx.year))
+    annual_pct = []
+    for yr in years_in_range:
+        yr_mask = idx.year == yr
+        yr_rets  = port_ret[yr_mask[:len(port_ret)]]
+        if len(yr_rets) == 0:
+            continue
+        compound = float(np.prod(1 + yr_rets) - 1) * 100   # as percentage
+        annual_pct.append((yr, compound))
+ 
+    if not annual_pct:
+        drawLabel("No annual data available", 300, 200, fill='gray')
+        return
+ 
+    # chart geometry 
+    n      = len(annual_pct)
+    left   = 60
+    baseline = 340          # y-position of the zero line
+    maxBarH  = 180          # max bar height in px (for most extreme value)
+    totalW   = 480
+    barW     = min(55, (totalW - (n - 1) * 10) // n)
+    gap      = (totalW - n * barW) // max(n - 1, 1)
+ 
+    max_abs = max(abs(v) for _, v in annual_pct) or 1
+ 
+    # Axes
+    drawLine(left, baseline, left + totalW, baseline, fill=rgb(160, 160, 160))
+    drawLine(left, baseline - maxBarH - 20, left, baseline + maxBarH + 20,
+             fill=rgb(160, 160, 160))
+ 
+    # Y-axis labels
+    for pct in [max_abs, max_abs / 2, 0, -max_abs / 2, -max_abs]:
+        py = baseline - (pct / max_abs) * maxBarH
+        drawLine(left - 4, py, left + totalW, py,
+                 fill=rgb(230, 230, 230), lineWidth=0.5)
+        drawLabel(f"{pythonRound(pct, 1)}%", left - 6, py,
+                  size=8, fill='gray', align='right')
+ 
+    # Bars
+    for i, (yr, pct) in enumerate(annual_pct):
+        bx = left + i * (barW + gap)
+        h  = (pct / max_abs) * maxBarH
+ 
+        if pct >= 0:
+            barColor = rgb(60, 170, 90)
+            drawRect(bx, baseline - h, barW, h,
+                     fill=barColor, border=rgb(40, 130, 60))
+            # % label above bar
+            drawLabel(f"+{pythonRound(pct, 1)}%", bx + barW / 2,
+                      baseline - h - 10, size=9, bold=True,
+                      fill=rgb(30, 110, 50))
         else:
-            drawRect(x, 350, barW, -h, fill=color)
-        drawLabel(str(years[i]), x + barW / 2, 370, size=9, rotateAngle=45)
-    drawLine(80, 350, 80 + len(values) * (barW + 10), 350, fill='gray')
-
+            barColor = rgb(210, 60, 60)
+            drawRect(bx, baseline, barW, -h,
+                     fill=barColor, border=rgb(160, 30, 30))
+            # % label below bar
+            drawLabel(f"{pythonRound(pct, 1)}%", bx + barW / 2,
+                      baseline - h + 14, size=9, bold=True,
+                      fill=rgb(160, 30, 30))
+ 
+        # Year label
+        drawLabel(str(yr), bx + barW / 2, baseline + 14, size=10, bold=True,
+                  fill=rgb(60, 60, 80))
+ 
+    # Period label
+    drawLabel(
+        f"Portfolio annual return  |  {m.start_date[:4]} – {(m.end_date or str(idx[-1].year))[:4]}",
+        left + totalW / 2, 50, size=9, fill='gray'
+    )
+    
 def getColor(value):
     clamped = max(-1, min(1, value))
     red = int(255 * (1 - clamped) / 2)
@@ -953,27 +1037,120 @@ def drawHeatmap(app):
         drawLabel(ticker, startX - 12, startY + i * cell + cell // 2, size=10, bold=True, align='right')
 
 def drawEfficientFrontier(app):
-    data = app.model.efficient_frontier
-    drawLabel("Efficient Frontier", 300, 30, bold=True, size=16)
-    if not data:
-        drawLabel("Run Optimize first", 300, 200, fill='gray')
+    m = app.model
+
+    # Title bar
+    drawRect(0, 0, 600, 46, fill=rgb(25, 55, 120), border=None)
+    drawLabel("Efficient Frontier", 300, 23, size=14, bold=True, fill='white')
+
+    if not m.efficient_frontier:
+        drawLabel("Run Optimize first", 300, 300, fill='gray')
         return
-    vols = [x[0] for x in data]
-    rets = [x[1] for x in data]
-    left, bottom = 60, 450
-    width, height = 480, 220
-    drawLine(left, bottom, left + width, bottom, fill='gray')
-    drawLine(left, bottom, left, bottom - height, fill='gray')
-    drawLabel("Risk (Volatility)", 300, bottom + 20)
-    drawLabel("Return", left - 30, bottom - height // 2, rotateAngle=90)
-    max_vol = max(vols)
-    max_ret = max(rets)
-    min_ret = min(rets)
-    rng = max_ret - min_ret or 1
-    for i in range(len(vols)):
-        x = left + (vols[i] / max_vol) * width
-        y = bottom - ((rets[i] - min_ret) / rng) * height
-        drawCircle(x, y, 3, fill='steelBlue', opacity=70)
+    
+    # Chart geometry
+    left, bottom = 72, 490
+    width, height = 440, 360
+
+    ef_vols = [x[0] for x in m.efficient_frontier]
+    ef_rets = [x[1] for x in m.efficient_frontier]
+    all_pts = m.all_portfolios
+
+    # Axis bounds, 10% pad from each side
+    all_vols = [v for v, _ in all_pts] + ef_vols
+    all_rets = [r for r, _ in all_pts] + ef_rets
+    v_min = min(all_vols); v_max = max(all_vols)
+    r_min = min(all_rets); r_max = max(all_rets)
+    v_pad = (v_max - v_min) * 0.1 or 0.01
+    r_pad = (r_max - r_min) * 0.1 or 0.01
+    v_min -= v_pad; v_max += v_pad
+    r_min -= r_pad; r_max += r_pad
+    v_rng = v_max - v_min
+    r_rng = r_max - r_min
+
+    def px(vol):
+        return left + ((vol - v_min) / v_rng) * width
+    def py(ret):
+        return bottom - ((ret - r_min) / r_rng) * height
+
+    # Axes
+    drawLine(left, bottom, left + width, bottom, fill=rgb(140, 140, 140), lineWidth=1.5)
+    drawLine(left, bottom, left, bottom - height, fill=rgb(140, 140, 140), lineWidth=1.5)
+
+    # X ticks (volatility)
+    x_ticks = 5
+    for i in range(x_ticks + 1):
+        v = v_min + i * v_rng / x_ticks
+        xp = px(v)
+        drawLine(xp, bottom, xp, bottom - height,
+                 fill=rgb(230, 230, 230), lineWidth=0.5)
+        drawLine(xp, bottom, xp, bottom + 4, fill=rgb(140, 140, 140))
+        drawLabel(f"{pythonRound(v, 2)}", xp, bottom + 13, size=8, fill='dimGray')
+
+    # Y ticks (return)
+    y_ticks = 5
+    for i in range(y_ticks + 1):
+        r = r_min + i * r_rng / y_ticks
+        yp = py(r)
+        drawLine(left, yp, left + width, yp,
+                 fill=rgb(230, 230, 230), lineWidth=0.5)
+        drawLine(left - 4, yp, left, yp, fill=rgb(140, 140, 140))
+        drawLabel(f"{pythonRound(r, 2)}", left - 6, yp, size=8,
+                  fill='dimGray', align='right')
+        
+    # Axis labels
+    drawLabel("Volatility (Std, Deviation)",
+              left + width / 2, bottom + 26, size=10, fill='dimGray')
+    drawLabel("Expected Return",
+              left - 44, bottom - height / 2, size=10, fill='dimGray', rotateAngle=-90)
+    
+    # Scatter cloud with all simulated portfolios
+    # Color depends on Sharpe ratio: low=blue, high=orange
+    max_sharpe_pt = max(all_pts, key=lambda p: p[1]/p[0] if p[0] > 0 else 0)
+    min_sharpe = min(r/v for v, r in all_pts if v > 0)
+    max_sharpe = max(r/v for v, r in all_pts if v > 0)
+    sharpe_rng = max_sharpe - min_sharpe or 1
+
+    for vol, ret in all_pts:
+        sharpe_norm = ((ret/vol) - min_sharpe) / sharpe_rng if vol > 0 else 0
+
+        if sharpe_norm < 0.5:
+            t = sharpe_norm * 2
+            col = rgb(int(80 + 120*t), int(120 + 80*t), int(200 - 100*t))
+        else:
+            t = (sharpe_norm - 0.5) * 2
+            col = rgb(int(200 + 30*t), int(200 - 120*t), int(100 - 80*t))
+        drawCircle(px(vol), py(ret), 2, fill=col, opacity=60, border=None)
+
+    # Create efficient frontier line
+    for i in range(len(ef_vols) - 1):
+        drawLine(px(ef_vols[i]), py(ef_rets[i]),
+                 px(ef_vols[i+1]), py(ef_rets[i+1]),
+                 fill=rgb(255, 200, 0), lineWidth=2.5)
+    
+    # Point for user portfolio
+    o_pt = getattr(m, 'optimal_frontier_point', None)
+    if o_pt:
+        drawStar(px(o_pt[0]), py(o_pt[1]), 9, 5,
+                 fill=rgb(255, 180, 0), border=rgb(180, 110, 0), borderWidth=1)
+        drawLabel("Max Sharpe", 
+                  px(o_pt[0]) + 11, py(o_pt[1]) - 8,
+                  size=9, bold=True, fill=rgb(180, 110, 0), align='left')
+
+    # Legend
+    lgX = left + width - 2
+    lgY = bottom - height + 10
+    drawRect(lgX - 118, lgY - 4, 120, 58,
+             fill=rgb(250,250,252), border=rgb(200,210,225), borderWidth=0.5)
+    drawLine(lgX - 110, lgY + 10, lgX - 96, lgY + 10,
+             fill=rgb(255,200,0), lineWidth=2.5)
+    drawLabel("Efficient Frontier", lgX - 92, lgY + 10,
+              size=8, fill='dimGray', align='left')
+    drawCircle(lgX - 103, lgY + 26, 5, fill=rgb(70,130,210), border='white')
+    drawLabel("Your Portfolio", lgX - 92, lgY + 26,
+              size=8, fill='dimGray', align='left')
+    drawStar(lgX - 103, lgY + 42, 6, 5, fill=rgb(255,180,0))
+    drawLabel("Max Sharpe", lgX - 92, lgY + 42,
+              size=8, fill='dimGray', align='left')         
 
 def drawAnnualTable(app):
     df = app.model.returns_df
@@ -1092,11 +1269,14 @@ def onKeyPress(app, key):
         pass  # no spaces in tickers or numbers
     elif len(key) == 1:
         # Accept digits, dot, minus, and letters (for tickers)
-        if key.isalpha():
+        if key.isalpha() and app.active_box == app.csv_path_box:
+            app.active_box['text'] += key
+        elif key.isalpha():
             app.active_box['text'] += key.upper()
-        elif key in '0123456789.-':
+        elif key in '0123456789.-/':
             app.active_box['text'] += key
 
+#/Users/polinaartemeva/Downloads/portfolio.csv
 # Draw 
 
 def redrawAll(app):
