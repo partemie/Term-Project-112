@@ -646,6 +646,16 @@ def drawSummaryScreen(app):
         if m.optimal_returns is not None:
             drawLabel(f"{pythonRound(o[i], 3)}", 450, y + 4)
 
+    # Instruction box below table
+    summary_lines = [
+        ("Start Value:   baseline cumulative value at the start of the period.", False),
+        ("End Value:     final cumulative value of the investment over the period.", False),
+        ("Ann. Return:   average yearly growth rate (CAGR).", False),
+        ("Volatility:    risk measured as annualised standard deviation of returns.", False),
+        ("Sharpe:        risk-adjusted return  (higher = better return per unit of risk).", False),
+    ]
+    drawInfoBox(summary_lines, x=10, y=365, w=580, size=12, center=True)
+
 def drawMultiLine(data, labels, colors, left=60, bottom=450,
                   width=460, height=220, dashed=False, lineWidth=1.5):
     """Generic multi-series line chart. Shared y-scale, independent x-scale."""
@@ -1007,7 +1017,35 @@ def drawAnnualScreen(app):
         f"Portfolio annual return  |  {m.start_date[:4]} – {(m.end_date or str(idx[-1].year))[:4]}",
         left + totalW / 2, 50, size=9, fill='gray'
     )
-    
+
+def drawInfoBox(lines, x, y, w, lineH=17, size=11, center=False, bullets=False):
+    """Draw a light info panel with text lines.
+    lines   : list of (text, bold) tuples.
+    center  : if True, text is centred within the box.
+    bullets : if True, prepend a bullet dot before each line.
+    Returns the y just below the box.
+    """
+    padding = 10
+    boxH = padding * 2 + len(lines) * lineH
+    drawRect(x, y, w, boxH, fill=rgb(245, 248, 255),
+             border=rgb(190, 205, 235), borderWidth=1)
+    for i, (text, bold) in enumerate(lines):
+        ty = y + padding + i * lineH + lineH // 2
+        if center:
+            label = ("• " + text) if bullets else text
+            drawLabel(label, x + w // 2, ty,
+                      size=size, bold=bold, fill=rgb(50, 60, 90), align='center')
+        else:
+            if bullets:
+                # Draw bullet dot then text with indent
+                drawCircle(x + padding + 4, ty, 2, fill=rgb(80, 100, 160), border=None)
+                drawLabel(text, x + padding + 14, ty,
+                          size=size, bold=bold, fill=rgb(50, 60, 90), align='left')
+            else:
+                drawLabel(text, x + padding, ty,
+                          size=size, bold=bold, fill=rgb(50, 60, 90), align='left')
+    return y + boxH + 6
+ 
 def getColor(value):
     clamped = max(-1, min(1, value))
     red = int(255 * (1 - clamped) / 2)
@@ -1020,10 +1058,20 @@ def drawHeatmap(app):
     if corr is None:
         drawLabel("Run Optimize first", 300, 200, fill='gray')
         return
+    
+    # Instructions box
+    corr_lines = [
+        ("Correlation matrix shows how returns of assets move relative to each other.", False),
+        ("Value > 0: both assets move together.  Value < 0: they move in opposite directions.", False),
+        ("Assets with low or negative correlation are used for diversification,", False),
+        ("which reduces overall portfolio risk.", False),
+    ]
+    drawInfoBox(corr_lines, x=10, y=62, w=580, center=True, bullets=True)
+
     n = len(corr)
     cell = 50
     startX = 300 - n * cell // 2
-    startY = 120
+    startY = 185
     for i in range(n):
         for j in range(n):
             color = getColor(corr[i][j])
@@ -1043,12 +1091,22 @@ def drawEfficientFrontier(app):
     drawRect(0, 0, 600, 46, fill=rgb(25, 55, 120), border=None)
     drawLabel("Efficient Frontier", 300, 23, size=14, bold=True, fill='white')
 
+    # Instruction box — offset from title bar, extra gap before chart
+    ef_lines = [
+        ("To build a portfolio we need: expected return E(r), standard deviation σ, and correlation corr(X,Y).", False),
+        ("The Efficient Frontier generates thousands of portfolios with different weight combinations.", False),
+        ("Each portfolio's return and risk (volatility) is computed and plotted as a dot.", False),
+        ("The yellow line marks the best portfolios at every risk level.", False),
+        ("The optimal portfolio has the highest return per unit of risk (Max Sharpe Ratio).", False),
+    ]
+    drawInfoBox(ef_lines, x=10, y=54, w=580, center=True, bullets=True)
+  
     if not m.efficient_frontier:
-        drawLabel("Run Optimize first", 300, 300, fill='gray')
+        drawLabel("Run Optimize first", 300, 420, fill='gray')
         return
     
     # Chart geometry
-    left, bottom = 72, 490
+    left, bottom = 72, 515
     width, height = 440, 360
 
     ef_vols = [x[0] for x in m.efficient_frontier]
@@ -1127,7 +1185,16 @@ def drawEfficientFrontier(app):
                  px(ef_vols[i+1]), py(ef_rets[i+1]),
                  fill=rgb(255, 200, 0), lineWidth=2.5)
     
-    # Point for user portfolio
+    # User portfolio
+    u_pt = getattr(m, 'user_frontier_point', None)
+    if u_pt:
+        drawCircle(px(u_pt[0]), py(u_pt[1]), 7,
+                   fill=rgb(70, 130, 210), border='white', borderWidth=1.5)
+        drawLabel("Your Portfolio",
+                  px(u_pt[0]) + 10, py(u_pt[1]) - 8,
+                  size=9, bold=True, fill=rgb(40, 80, 160), align='left')
+
+    # Optimal (max Sharpe) portfolio
     o_pt = getattr(m, 'optimal_frontier_point', None)
     if o_pt:
         drawStar(px(o_pt[0]), py(o_pt[1]), 9, 5,
