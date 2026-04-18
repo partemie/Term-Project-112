@@ -322,7 +322,7 @@ def drawBackground():
         y += GRID_MINOR
         row += 1
 
-# ── Shared header helpers ─────────────────────────────────────────────────────
+# Shared header helpers
 HEADER_H  = 46
 HEADER_BG = rgb(25, 55, 120)
 
@@ -529,7 +529,8 @@ def drawInputScreen(app):
     drawLabel("YYYY or YYYY-MM-DD", 22, 153, size=8, fill='gray', align='left')
     drawBox(app.end_year_box, app.active_box is app.end_year_box)
 
-    drawLabel("Use Historical", 22, 196, size=10, fill=rgb(60,70,100), align='left')
+    drawLabel("Use Historical", 22, 196, size=10, fill=rgb(60,70,100), 
+              align='left')
     hFill = rgb(180, 230, 180) if app.use_historical else rgb(220, 225, 235)
     drawRect(160, 185, 52, 22, fill=hFill, border=rgb(150,170,150))
     drawLabel("Yes" if app.use_historical else "No", 186, 196, size=10,
@@ -547,7 +548,8 @@ def drawInputScreen(app):
     drawRect(300, 60, 290, 24, fill=HEADER_BG, border=None)
     drawLabel("Investment & Import", 445, 72, bold=True, fill='white', size=11)
 
-    drawLabel("Amount ($):", 312, 101, size=10, fill=rgb(60,70,100), align='left')
+    drawLabel("Amount ($):", 312, 101, size=10, fill=rgb(60,70,100), 
+              align='left')
     drawBox(app.amount_box, app.active_box is app.amount_box)
 
     csvLoaded = getattr(app, 'csv_loaded', False)
@@ -558,7 +560,8 @@ def drawInputScreen(app):
               fill=rgb(180,180,200))
     btnFill  = rgb(180, 230, 180) if csvLoaded else HEADER_BG
     btnLabel = "CSV Loaded" if csvLoaded else "Upload CSV"
-    drawRect(380, 172, 180, 26, fill=btnFill, border=rgb(180,200,240))  # centred in panel
+    drawRect(380, 172, 180, 26, fill=btnFill, border=rgb(180,200,240))  
+    # centred in panel
     drawLabel(btnLabel, 470, 185, size=10,
               fill=rgb(30,100,30) if csvLoaded else 'white')
 
@@ -694,7 +697,8 @@ def drawAllocationTable(tickers, weights, names, x, y, rowH=22):
 # Section panel (title bar, table, donut)
 def drawPortfolioPanel(title, subtitle, tickers, weights, names,
                        panelY, panelH, appWidth=600):
-    """Draw one half-page panel with title, table on the left, donut on right."""
+    """Draw one half-page panel with title, table on the left, / 
+    donut on right."""
     # Panel background
     drawRect(10, panelY, appWidth - 20, panelH,
              fill=rgb(248, 250, 254), border=rgb(210, 220, 235), borderWidth=1)
@@ -808,27 +812,34 @@ def computeMetrics(returns):
     sharpe = ann_return / vol if vol > 0 else 0
     cumulative = np.cumprod(1 + returns)
     return [cumulative[0], cumulative[-1], ann_return, vol, sharpe]
-    
+
+# Display information about the metric to a user
 def drawInfoBox(lines, x, y, w, lineH=17, size=11, center=False, bullets=False):
     padding = 10
     boxH    = padding * 2 + len(lines) * lineH
+
     drawRect(x, y, w, boxH, fill=rgb(240, 244, 255),
              border=rgb(180, 198, 235), borderWidth=1)
+    
     for i, (text, bold) in enumerate(lines):
         ty = y + padding + i * lineH + lineH // 2
         if center:
             label = ("• " + text) if bullets else text
             drawLabel(label, x + w // 2, ty,
-                      size=size, bold=bold, fill=rgb(40, 55, 100), align='center')
+                      size=size, bold=bold, fill=rgb(40, 55, 100), 
+                      align='center')
         else:
             if bullets:
                 drawCircle(x + padding + 4, ty, 2,
                            fill=rgb(70, 100, 170), border=None)
                 drawLabel(text, x + padding + 14, ty,
-                          size=size, bold=bold, fill=rgb(40, 55, 100), align='left')
+                          size=size, bold=bold, fill=rgb(40, 55, 100), 
+                          align='left')
             else:
                 drawLabel(text, x + padding, ty,
-                          size=size, bold=bold, fill=rgb(40, 55, 100), align='left')
+                          size=size, bold=bold, fill=rgb(40, 55, 100), 
+                          align='left')
+    
     return y + boxH + 6
 
 def drawSummaryScreen(app):
@@ -861,13 +872,33 @@ def drawSummaryScreen(app):
         drawLabel(f"{pythonRound(p[i], 3)}", 300, y + 4, size=11)
         if m.optimal_returns is not None:
             drawLabel(f"{pythonRound(o[i], 3)}", 450, y + 4, size=11)
+
     # Instruction box below table
     summary_lines = [
-        ("Start Value:   baseline cumulative value at the start of the period.", False),
-        ("End Value:     final cumulative value of the investment over the period.", False),
-        ("Ann. Return:   average yearly growth rate (CAGR).", False),
-        ("Volatility:    risk measured as annualised standard deviation of returns.", False),
-        ("Sharpe:        risk-adjusted return  (higher = better return per unit of risk).", False),
+        (
+            "Start Value:   baseline cumulative value at the start of the " 
+            "period.", 
+         False
+        ),
+        (
+            "End Value:     final cumulative value of the investment over the "
+        "period.", 
+        False
+        ),
+        (
+            "Ann. Return:   average yearly growth rate (CAGR).", 
+            False
+        ),
+        (
+            "Volatility:    risk measured as annualised standard deviation of "
+        "returns.", 
+        False
+        ),
+        (
+            "Sharpe:        risk-adjusted return  (higher = better return per "
+        "unit of risk).", 
+        False
+        ),
     ]
     drawInfoBox(summary_lines, x=10, y=365, w=580, size=12, center=True)
 
@@ -878,7 +909,6 @@ def _fmt_dollars(v):
     if v >= 1_000:
         return f"${pythonRound(v/1_000, 1)}K"
     return f"${pythonRound(v, 0)}"
-
 
 def _project_series(ann_return, ann_vol, start_value, years=5, 
                     steps_per_year=12):
@@ -925,7 +955,8 @@ def drawGrowthScreen(app):
 
     # Convert cumulative returns to actual dollar values
     def scale(cum):
-        """Convert a cumulative-return series (starting at 1) to dollar values."""
+        """Convert a cumulative-return series (starting at 1) to / 
+        dollar values."""
         if cum is None or len(cum) < 2:
             return None
         base = cum[0]
@@ -972,11 +1003,17 @@ def drawGrowthScreen(app):
     )
     proj_opt_c = proj_opt_u = proj_opt_l = None
     if end_opt is not None and ar_opt is not None:
-        proj_opt_c, proj_opt_u, proj_opt_l = _project_series(ar_opt, av_opt, end_opt)
+        proj_opt_c, proj_opt_u, proj_opt_l = _project_series(
+            ar_opt, 
+            av_opt, 
+            end_opt)
 
     proj_spy_c = proj_spy_u = proj_spy_l = None
     if end_spy is not None and ar_spy is not None:
-        proj_spy_c, proj_spy_u, proj_spy_l = _project_series(ar_spy, av_spy, end_spy)
+        proj_spy_c, proj_spy_u, proj_spy_l = _project_series(
+            ar_spy, 
+            av_spy, 
+            end_spy)
 
     # Global y scale (historical + projection together)
     all_vals = list(hist_user)
@@ -1038,9 +1075,15 @@ def drawGrowthScreen(app):
             yb = to_px(y_min)
 
             # lighten the fill colour
-            fc = rgb(min(255, color.red + 100),
+            fc = (
+                rgb(
+                    min(255, color.red + 100),
                      min(255, color.green + 100),
-                     min(255, color.blue + 100)) if hasattr(color, 'red') else 'lightGray'
+                     min(255, color.blue + 100)
+                     ) 
+                     if hasattr(color, 'red') 
+                     else 'lightGray'
+            )
             
             drawLine(xi, yi, xi, yb, fill=fc, lineWidth=3, opacity=55)
         
@@ -1224,7 +1267,8 @@ def drawAnnualScreen(app):
         drawLabel(str(yr), bx + barW / 2, baseline + 14, size=10, bold=True,
                   fill=rgb(40, 50, 90))
     drawLabel(
-        f"Portfolio annual return  |  {m.start_date[:4]} – {(m.end_date or str(idx[-1].year))[:4]}",
+        f"Portfolio annual return  |  {m.start_date[:4]} – "
+        f"{(m.end_date or str(idx[-1].year))[:4]}",
         left + totalW / 2, 65, size=9, fill=rgb(100, 110, 140))
  
 def getColor(value):
@@ -1249,10 +1293,25 @@ def drawHeatmap(app):
     
     # Instructions box
     corr_lines = [
-        ("Correlation matrix shows how returns of assets move relative to each other.", False),
-        ("Value > 0: both assets move together.  Value < 0: they move in opposite directions.", False),
-        ("Assets with low or negative correlation are used for diversification,", False),
-        ("which reduces overall portfolio risk.", False),
+        (
+            "Correlation matrix shows how returns of assets move "
+            "relative to each other.", 
+            False
+        ),
+        (
+            "Value > 0: both assets move together. "
+            "Value < 0: they move in opposite directions.", 
+            False
+        ),
+        (
+            "Assets with low or negative correlation are used for " 
+            "diversification,", 
+            False
+        ),
+        (
+            "which reduces overall portfolio risk.", 
+            False
+        ),
     ]
     drawInfoBox(corr_lines, x=10, y=62, w=580, center=True, bullets=True)
 
@@ -1266,7 +1325,8 @@ def drawHeatmap(app):
     for i in range(n):
         for j in range(n):
             color = getColor(corr[i][j])
-            drawRect(startX + j * cell, startY + i * cell, cell, cell, fill=color)
+            drawRect(startX + j * cell, startY + i * cell, cell, cell, 
+                     fill=color)
             
             # Display correlation value inside each cell
             drawLabel(f"{pythonRound(corr[i][j], 2)}",
@@ -1315,11 +1375,31 @@ def drawEfficientFrontier(app):
 
     # Instruction box: offset from title bar, extra gap before chart
     ef_lines = [
-        ("To build a portfolio we need: expected return E(r), standard deviation σ, and correlation corr(X,Y).", False),
-        ("The Efficient Frontier generates thousands of portfolios with different weight combinations.", False),
-        ("Each portfolio's return and risk (volatility) is computed and plotted as a dot.", False),
-        ("The yellow line marks the best portfolios at every risk level.", False),
-        ("The optimal portfolio has the highest return per unit of risk (Max Sharpe Ratio).", False),
+        (
+            "To build a portfolio we need: expected return E(r), " 
+            "standard deviation σ, and correlation corr(X,Y).", 
+            False
+        ),
+        (
+            "The Efficient Frontier generates thousands of portfolios " 
+            "with different weight combinations.", 
+            False
+        ),
+        (
+            "Each portfolio's return and risk (volatility) is computed " 
+            "and plotted as a dot.", 
+            False
+        ),
+        (
+            "The yellow line marks the best portfolios at every " 
+            "risk level.", 
+            False
+        ),
+        (
+            "The optimal portfolio has the highest return per unit " 
+            "of risk (Max Sharpe Ratio).", 
+            False
+        ),
     ]
     drawInfoBox(ef_lines, x=10, y=54, w=580, center=True, bullets=True)
   
@@ -1435,7 +1515,8 @@ def drawEfficientFrontier(app):
     # Legend
     lgX, lgY = left + 8, bottom - height + 8
     drawRect(lgX, lgY, 132, 64,
-             fill=rgb(245, 247, 255), border=rgb(180, 198, 235), borderWidth=0.8)
+             fill=rgb(245, 247, 255), border=rgb(180, 198, 235), 
+             borderWidth=0.8)
     drawLine(lgX + 8, lgY + 12, lgX + 22, lgY + 12,
              fill=rgb(255, 210, 0), lineWidth=2.5)
     drawLabel("Efficient Frontier", lgX + 26, lgY + 12,
@@ -1478,7 +1559,6 @@ def drawAnnualTable(app):
         drawLabel(f"{pythonRound(val * 100, 2)}%", 350, y + 2, fill=color)
 
 # Mouse & keyboard
-
 def onMousePress(app, x, y):
     # Always check boxes first: set active and return
     for box in [app.start_year_box, app.end_year_box, app.amount_box, 
@@ -1506,7 +1586,9 @@ def onMousePress(app, x, y):
         if 355 <= x <= 535 and 172 <= y <= 198:
             path = app.csv_path_box['text'].strip()
             if not path:
-                app.status_message = 'Enter a file path in the box below the button'
+                app.status_message = (
+                    'Enter a file path in the box below the button'
+                )
                 return
 
             tickers, result = load_portfolio_from_csv(path)
@@ -1524,7 +1606,9 @@ def onMousePress(app, x, y):
             weights_loaded = result
             for i, (t, w) in enumerate(zip(tickers, weights_loaded)):
                 app.asset_rows[i]['ticker']['text'] = t
-                app.asset_rows[i]['weight']['text'] = str(pythonRound(w * 100, 1))
+                app.asset_rows[i]['weight']['text'] = str(
+                    pythonRound(w * 100, 1)
+                )
             app.status_message = f'Loaded {len(tickers)} tickers from CSV'
             app.csv_loaded = True
             return
